@@ -1,0 +1,12 @@
+# Set default behavior to automatically normalize line endings.
+* text=auto
+
+# Explicitly declare text files you want to always normalize
+*.js text
+*.json text
+*.md text
+
+# Declare binary files to be excluded from normalization
+*.png binary
+*.jpg binary
+*.exe binary

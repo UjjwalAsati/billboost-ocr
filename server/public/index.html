@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Aadhaar Info Extractor</title>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    textarea { width: 100%; height: 150px; margin-bottom: 10px; }
+    button { padding: 10px 20px; }
+    pre { background: #1e1d1d; padding: 15px; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>Aadhaar Text Extractor</h1>
+
+  <textarea id="ocrText" placeholder="Paste OCR text here..."></textarea>
+  <br>
+  <button onclick="extract()">Extract Info</button>
+
+  <h2>Extracted Data:</h2>
+  <pre id="result">Waiting for input...</pre>
+
+  <script>
+    async function extract() {
+      const text = document.getElementById("ocrText").value;
+      const resultBox = document.getElementById("result");
+
+      resultBox.textContent = "⏳ Extracting...";
+
+      try {
+        const res = await fetch("/extract-info", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text }),
+        });
+
+        const data = await res.json();
+
+        if (res.ok) {
+          resultBox.textContent = JSON.stringify(data.result, null, 2);
+        } else {
+          resultBox.textContent = `❌ Error: ${data.error || "Unknown error"}`;
+          if (data.raw) {
+            resultBox.textContent += "\n\nRaw Gemini response:\n" + data.raw;
+          }
+        }
+      } catch (err) {
+        resultBox.textContent = "❌ Network error or server is down.";
+        console.error(err);
+      }
+    }
+  </script>
+</body>
+</html>
