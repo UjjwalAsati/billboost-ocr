@@ -60,7 +60,6 @@ ${text.trim()}
     );
 
     const data = await response.json();
-    console.log("Gemini response:", JSON.stringify(data, null, 2));
 
     if (data.error) {
       return res.status(400).json({ error: data.error.message });
@@ -81,14 +80,15 @@ ${text.trim()}
       parsedResult = finalText;
     }
 
+    console.log("✅ Aadhaar data extraction successful.");
     res.json({ result: parsedResult });
   } catch (error) {
-    console.error("Gemini API error:", error);
+    console.error("❌ Gemini API error:", error.message);
     res.status(500).json({ error: "Failed to fetch from Gemini" });
   }
 });
 
 const PORT = 5000;
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`🚀 Server listening on port ${PORT}`);
 });
