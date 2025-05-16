@@ -16,6 +16,18 @@ body {
   text-align: center;
 }
 
+.dropzone {
+  border: 2px dashed #007bff;
+  border-radius: 10px;
+  padding: 30px;
+  text-align: center;
+  color: #007bff;
+  font-size: 16px;
+  cursor: pointer;
+  background-color: #f0f8ff;
+  margin-bottom: 1rem;
+}
+
 h1 {
   color: #00796b;
   margin-bottom: 1.5rem;
@@ -39,6 +51,7 @@ button {
   cursor: pointer;
   font-size: 1rem;
   transition: background 0.3s ease;
+  margin-top: 1rem;
 }
 
 button:hover {
@@ -61,6 +74,7 @@ textarea {
   border: 1px solid #ccc;
   border-radius: 6px;
   resize: vertical;
+  margin-top: 1rem;
 }
 
 pre {
@@ -73,6 +87,7 @@ pre {
   font-family: monospace;
   color: #1b1b1b;
   overflow-x: auto;
+  margin-top: 1rem;
 }
 
 .error {
