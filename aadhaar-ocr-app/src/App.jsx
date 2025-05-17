@@ -55,80 +55,105 @@ function App() {
     setLoading(false);
   };
 
+  const handleCopy = async () => {
+    if (!processedData) return;
+
+    const cleaned = `
+Name: ${processedData.name || "N/A"}
+DOB: ${processedData.dob || "N/A"}
+Gender: ${processedData.gender || "N/A"}
+Aadhaar Number: ${processedData.aadhaarNumber || "N/A"}
+Address: ${processedData.address || "N/A"}
+    `.trim();
+
+    try {
+      await navigator.clipboard.writeText(cleaned);
+      alert("Cleaned Aadhaar data copied to clipboard!");
+    } catch (err) {
+      alert("Failed to copy.");
+      console.error(err);
+    }
+  };
+
   return (
-  <div style={{ padding: "2rem" }}>
-    <h1 style={{ textAlign: "center", marginBottom: "2rem" }}>Aadhaar OCR Extractor</h1>
+    <div style={{ padding: "2rem" }}>
+      <h1 style={{ textAlign: "center", marginBottom: "2rem" }}>
+        Aadhaar OCR Extractor
+      </h1>
 
-    <div style={{ display: "flex", gap: "2rem" }}>
-      {/* Left Side: Image Upload */}
-      <div style={{ flex: 1, textAlign: "center" }}>
-        <input
-          type="file"
-          accept="image/*"
-          multiple
-          onChange={handleImageChange}
-          disabled={loading}
-        />
-        <br /><br />
+      <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
+        {/* Left Side: Image Upload */}
+        <div style={{ flex: 1, textAlign: "center" }}>
+          <input
+            type="file"
+            accept="image/*"
+            multiple
+            onChange={handleImageChange}
+            disabled={loading}
+          />
+          <br />
+          <br />
 
-        {images.length > 0 && (
-          <div>
-            {images.map((img, index) => (
-              <img
-                key={index}
-                src={img}
-                alt={`Aadhaar ${index + 1}`}
-                width="250"
-                style={{ margin: "10px", borderRadius: "8px" }}
-              />
-            ))}
+          {images.length > 0 && (
+            <div>
+              {images.map((img, index) => (
+                <img
+                  key={index}
+                  src={img}
+                  alt={`Aadhaar ${index + 1}`}
+                  width="250"
+                  style={{ margin: "10px", borderRadius: "8px" }}
+                />
+              ))}
 
-            <br />
-            <button onClick={handleExtractText} disabled={loading}>
-              {loading ? "Processing..." : "Extract & Clean"}
-            </button>
-          </div>
-        )}
+              <br />
+              <button onClick={handleExtractText} disabled={loading}>
+                {loading ? "Processing..." : "Extract & Clean"}
+              </button>
+            </div>
+          )}
 
-        {error && <p style={{ color: "red", marginTop: "1rem" }}>{error}</p>}
-      </div>
+          {error && <p style={{ color: "red", marginTop: "1rem" }}>{error}</p>}
+        </div>
 
-      {/* Right Side: Aadhaar Details */}
-      <div style={{ flex: 1 }}>
-        {processedData && (
-          <div
-            style={{
-              backgroundColor: "#f9f9f9",
-              padding: "20px",
-              borderRadius: "10px",
-              boxShadow: "0 0 10px rgba(0,0,0,0.1)",
-              fontSize: "16px",
-              lineHeight: "1.8",
-            }}
-          >
-            <h3>Cleaned Aadhaar Details:</h3>
+        {/* Right Side: Aadhaar Details */}
+        <div style={{ flex: 1 }}>
+          {processedData && (
             <div
               style={{
-                display: "flex",
-                flexWrap: "wrap",
-                gap: "20px",
+                backgroundColor: "#f9f9f9",
+                padding: "20px",
+                borderRadius: "10px",
+                boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+                fontSize: "16px",
+                lineHeight: "1.8",
               }}
             >
-              <div><strong>Name:</strong> {processedData.name || "N/A"}</div>
-              <div><strong>DOB:</strong> {processedData.dob || "N/A"}</div>
-              <div><strong>Gender:</strong> {processedData.gender || "N/A"}</div>
-              <div><strong>Aadhaar Number:</strong> {processedData.aadhaarNumber || "N/A"}</div>
-              <div style={{ flexBasis: "100%" }}>
-                <strong>Address:</strong> {processedData.address || "N/A"}
+              <h3>Cleaned Aadhaar Details:</h3>
+              <div
+                style={{
+                  display: "flex",
+                  flexWrap: "wrap",
+                  gap: "20px",
+                }}
+              >
+                <div><strong>Name:</strong> {processedData.name || "N/A"}</div>
+                <div><strong>DOB:</strong> {processedData.dob || "N/A"}</div>
+                <div><strong>Gender:</strong> {processedData.gender || "N/A"}</div>
+                <div><strong>Aadhaar Number:</strong> {processedData.aadhaarNumber || "N/A"}</div>
+                <div style={{ flexBasis: "100%" }}>
+                  <strong>Address:</strong> {processedData.address || "N/A"}
+                </div>
               </div>
+
+              {/* ✅ Copy Button */}
+              <button style={{ marginTop: "20px" }} onClick={handleCopy}>Copy</button>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
-  </div>
-);
-
+  );
 }
 
 export default App;
