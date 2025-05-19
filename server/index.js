@@ -3,19 +3,19 @@ import express from "express";
 import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
+import multer from "multer";
+import PDFParser from "pdf2json"; // Use pdf2json instead
 
 dotenv.config();
 
 const app = express();
 
-// Middleware to parse JSON bodies
 app.use(express.json());
-
-// Enable CORS
 app.use(cors());
 
+const upload = multer({ storage: multer.memoryStorage() });
+
 app.post("/extract-info", async (req, res) => {
-  // Check if req.body is defined
   if (!req.body) {
     return res.status(400).json({ error: "Request body is required" });
   }
@@ -29,57 +29,57 @@ app.post("/extract-info", async (req, res) => {
   let prompt = "";
   if (docType === "aadhaar") {
     prompt = `
-Extract the following details from the OCR text of an Aadhaar card (which may include text from both front and back sides):
+    Extract the following details from the OCR text of an Aadhaar card (which may include text from both front and back sides):
 
-* Full Name (look for "Name", "नाम", or similar labels, or a name-like string near the top)
-* Date of Birth (format: DD/MM/YYYY, look for "DOB", "Date of Birth", "जन्म तिथि", or a date pattern like DD/MM/YYYY)
-* Gender (look for "Gender", "लिंग", "Male", "Female", "M", "F", or similar)
-* Aadhaar Number (12 digits, often in the format XXXX XXXX XXXX or 12 consecutive digits)
-* Full Address (look for "Address", "पता", or a multi-line string that looks like an address, often containing words like "Street", "Road", "Village", "City", "Pin", etc.)
+    * Full Name (look for "Name", "नाम", or similar labels, or a name-like string near the top)
+    * Date of Birth (format: DD/MM/YYYY, look for "DOB", "Date of Birth", "जन्म तिथि", or a date pattern like DD/MM/YYYY)
+    * Gender (look for "Gender", "लिंग", "Male", "Female", "M", "F", or similar)
+    * Aadhaar Number (12 digits, often in the format XXXX XXXX XXXX or 12 consecutive digits)
+    * Full Address (look for "Address", "पता", or a multi-line string that looks like an address, often containing words like "Street", "Road", "Village", "City", "Pin", etc.)
 
-Return ONLY a valid JSON object with these keys:
-{
-  "name": "",
-  "dob": "",
-  "gender": "",
-  "aadhaarNumber": "",
-  "address": ""
-}
+    Return ONLY a valid JSON object with these keys:
+    {
+      "name": "",
+      "dob": "",
+      "gender": "",
+      "aadhaarNumber": "",
+      "address": ""
+    }
 
-If a field cannot be found, return "N/A" for that field. Be flexible with formatting and look for patterns even if labels are missing.
+    If a field cannot be found, return "N/A" for that field. Be flexible with formatting and look for patterns even if labels are missing.
 
-OCR Text:
-"""
-${text.trim()}
-"""
+    OCR Text:
+    """
+    ${text.trim()}
+    """
     `.trim();
   } else if (docType === "form21") {
     prompt = `
-Extract the following details from the text of a Form 21 (Vehicle Sale Certificate):
+    Extract the following details from the text of a Form 21 (Vehicle Sale Certificate):
 
-* Engine Number
-* Chassis Number
-* Year of Manufacture (format: YYYY)
-* Month of Manufacture (e.g., January, February, etc.)
-* Name of Buyer
-* Full Address
-* Dated (format: DD/MM/YYYY)
+    * Engine Number
+    * Chassis Number
+    * Year of Manufacture (format: YYYY)
+    * Month of Manufacture (e.g., January, February, etc.)
+    * Name of Buyer
+    * Full Address
+    * Dated (format: DD/MM/YYYY)
 
-Return ONLY a valid JSON object with these keys:
-{
-  "engineNumber": "",
-  "chassisNumber": "",
-  "yearOfManufacture": "",
-  "monthOfManufacture": "",
-  "nameOfBuyer": "",
-  "address": "",
-  "dated": ""
-}
+    Return ONLY a valid JSON object with these keys:
+    {
+      "engineNumber": "",
+      "chassisNumber": "",
+      "yearOfManufacture": "",
+      "monthOfManufacture": "",
+      "nameOfBuyer": "",
+      "address": "",
+      "dated": ""
+    }
 
-Text:
-"""
-${text.trim()}
-"""
+    Text:
+    """
+    ${text.trim()}
+    """
     `.trim();
   } else {
     return res.status(400).json({ error: "Invalid docType" });
@@ -115,7 +115,6 @@ ${text.trim()}
       return res.json({ result: "No result found" });
     }
 
-    // Helper to strip markdown code blocks
     const extractJson = (text) => {
       return text.trim().replace(/^```json\s*/, "").replace(/\s*```$/, "");
     };
@@ -135,6 +134,32 @@ ${text.trim()}
   } catch (error) {
     console.error(`❌ Error during ${docType} extraction:`, error.message);
     res.status(500).json({ error: "Failed to fetch from Gemini" });
+  }
+});
+
+app.post("/extract-pdf-text", upload.single("pdf"), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: "No PDF file uploaded." });
+    }
+
+    const pdfParser = new PDFParser();
+    let text = "";
+
+    return new Promise((resolve, reject) => {
+      pdfParser.on("pdfParser_dataError", err => reject(err));
+      pdfParser.on("pdfParser_dataReady", pdfData => {
+        text = pdfData.Pages.reduce((acc, page) => {
+          return acc + (page.Texts.map(text => decodeURIComponent(text.R[0].T)).join(" ") + "\n");
+        }, "");
+        resolve(res.json({ text: text.trim() }));
+      });
+
+      pdfParser.parseBuffer(req.file.buffer);
+    });
+  } catch (err) {
+    console.error("Error extracting PDF text:", err);
+    res.status(500).json({ error: "Failed to extract text from PDF: " + err.message });
   }
 });
 

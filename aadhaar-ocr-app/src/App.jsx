@@ -6,24 +6,45 @@ import axios from "axios";
 import "./App.css";
 
 function App() {
-  const [docType, setDocType] = useState("aadhaar"); // Default to Aadhaar
-  const [files, setFiles] = useState([]); // For Aadhaar images (front and back)
-  const [filePreviews, setFilePreviews] = useState([]); // For Aadhaar image previews
-  const [form21Text, setForm21Text] = useState(""); // For Form 21 copied text
+  const [docType, setDocType] = useState("aadhaar");
+  const [files, setFiles] = useState([]);
+  const [filePreviews, setFilePreviews] = useState([]);
+  const [form21Text, setForm21Text] = useState("");
   const [processedData, setProcessedData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleFileSelect = (selectedFiles) => {
-    const newFiles = [...files, ...selectedFiles].slice(0, 2); // Limit to 2 files
+  const handleFileSelect = async (selectedFiles) => {
+    const newFiles = [...files, ...selectedFiles].slice(0, docType === "aadhaar" ? 2 : 1);
     setFiles(newFiles);
     setProcessedData(null);
     setError("");
 
-    // Create previews for Aadhaar images
     if (docType === "aadhaar") {
       const newPreviews = newFiles.map(file => URL.createObjectURL(file));
       setFilePreviews(newPreviews);
+    } else if (docType === "form21" && selectedFiles.length > 0) {
+      setLoading(true);
+      try {
+        const file = selectedFiles[0];
+        const formData = new FormData();
+        formData.append("pdf", file);
+
+        const response = await axios.post("http://localhost:5000/extract-pdf-text", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        setForm21Text(response.data.text.trim());
+      } catch (err) {
+        const errorMessage = "Error extracting text from PDF: " + err.message;
+        console.error(errorMessage);
+        setError(errorMessage);
+        setForm21Text("");
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
@@ -33,7 +54,7 @@ function App() {
       return;
     }
     if (docType === "form21" && !form21Text) {
-      setError("Please paste the Form 21 text.");
+      setError("No text extracted from the Form 21 PDF.");
       return;
     }
 
@@ -43,7 +64,6 @@ function App() {
     try {
       let text = "";
       if (docType === "aadhaar") {
-        // Perform OCR on the frontend for Aadhaar images
         for (const file of files) {
           const { data: { text: ocrText } } = await Tesseract.recognize(file, "eng");
           text += ocrText + "\n";
@@ -52,20 +72,22 @@ function App() {
         text = form21Text;
       }
 
-      // Send the extracted text to the backend as JSON
       const response = await axios.post("http://localhost:5000/extract-info", { docType, text }, {
         headers: {
           "Content-Type": "application/json",
         },
       });
 
-      if (response.data.result) {
+      // Extract the inner result object from the response
+      if (response.data.result && typeof response.data.result === "object") {
         setProcessedData(response.data.result);
       } else {
         setProcessedData({ message: "No data extracted." });
       }
     } catch (err) {
-      setError("Error during processing: " + err.message);
+      const errorMessage = "Error during processing: " + err.message;
+      console.error(errorMessage, err.response?.data);
+      setError(errorMessage);
       setProcessedData(null);
     }
 
@@ -100,15 +122,20 @@ Dated: ${processedData.dated || "N/A"}
       await navigator.clipboard.writeText(cleaned);
       alert("Extracted data copied to clipboard!");
     } catch (err) {
+      const errorMessage = "Failed to copy to clipboard: " + err.message;
+      console.error(errorMessage);
       alert("Failed to copy.");
     }
   };
 
-  const handleRemoveImage = (index) => {
+  const handleRemoveFile = (index) => {
     const updatedFiles = files.filter((_, i) => i !== index);
     const updatedPreviews = filePreviews.filter((_, i) => i !== index);
     setFiles(updatedFiles);
     setFilePreviews(updatedPreviews);
+    if (docType === "form21") {
+      setForm21Text("");
+    }
   };
 
   return (
@@ -135,7 +162,6 @@ Dated: ${processedData.dated || "N/A"}
       </div>
 
       <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
-        {/* Left Side: File Upload or Textarea */}
         <div style={{ flex: 1, textAlign: "center" }}>
           {docType === "aadhaar" ? (
             <>
@@ -155,7 +181,7 @@ Dated: ${processedData.dated || "N/A"}
                         style={{ borderRadius: "8px" }}
                       />
                       <button
-                        onClick={() => handleRemoveImage(index)}
+                        onClick={() => handleRemoveFile(index)}
                         style={{
                           position: "absolute",
                           top: "-10px",
@@ -178,22 +204,49 @@ Dated: ${processedData.dated || "N/A"}
               )}
             </>
           ) : (
-            <textarea
-              value={form21Text}
-              onChange={(e) => setForm21Text(e.target.value)}
-              placeholder="Paste the copied Form 21 text here..."
-              style={{
-                width: "100%",
-                height: "150px",
-                padding: "10px",
-                fontFamily: "monospace",
-                backgroundColor: "#f9f9f9",
-                border: "1px solid #ccc",
-                borderRadius: "6px",
-                resize: "vertical",
-                marginBottom: "1rem",
-              }}
-            />
+            <>
+              <DragAndDrop
+                onFileSelect={handleFileSelect}
+                accept="application/pdf"
+                multiple={false}
+              />
+              {files.length > 0 && (
+                <div style={{ margin: "10px" }}>
+                  <span>Uploaded PDF: {files[0].name}</span>
+                  <button
+                    onClick={() => handleRemoveFile(0)}
+                    style={{
+                      marginLeft: "10px",
+                      background: "red",
+                      color: "white",
+                      border: "none",
+                      borderRadius: "50%",
+                      width: "20px",
+                      height: "20px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    X
+                  </button>
+                </div>
+              )}
+              <textarea
+                value={form21Text}
+                onChange={(e) => setForm21Text(e.target.value)}
+                placeholder="Extracted text from the PDF will appear here..."
+                style={{
+                  width: "100%",
+                  height: "150px",
+                  padding: "10px",
+                  fontFamily: "monospace",
+                  backgroundColor: "#f9f9f9",
+                  border: "1px solid #ccc",
+                  borderRadius: "6px",
+                  resize: "vertical",
+                  marginBottom: "1rem",
+                }}
+              />
+            </>
           )}
 
           {(files.length > 0 || form21Text) && (
@@ -205,9 +258,8 @@ Dated: ${processedData.dated || "N/A"}
           {error && <p className="error">{error}</p>}
         </div>
 
-        {/* Right Side: Extracted Details */}
         <div style={{ flex: 1 }}>
-          {processedData && (
+          {processedData && !processedData.message && (
             <div
               style={{
                 backgroundColor: "#f9f9f9",
@@ -254,8 +306,23 @@ Dated: ${processedData.dated || "N/A"}
                   <div><strong>Dated:</strong> {processedData.dated || "N/A"}</div>
                 </div>
               )}
-
-              <button style={{ marginTop: "20px" }} onClick={handleCopy}>Copy</button>
+              <button style={{ marginTop: "20px" }} onClick={handleCopy}>
+                Copy
+              </button>
+            </div>
+          )}
+          {processedData && processedData.message && (
+            <div
+              style={{
+                backgroundColor: "#f9f9f9",
+                padding: "20px",
+                borderRadius: "10px",
+                boxShadow: "0 0 10px rgba(0,0,0,0.1)",
+                fontSize: "16px",
+                lineHeight: "1.8",
+              }}
+            >
+              <p>{processedData.message}</p>
             </div>
           )}
         </div>
