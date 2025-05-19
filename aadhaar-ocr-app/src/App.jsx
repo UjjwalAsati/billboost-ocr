@@ -9,7 +9,6 @@ function App() {
   const [docType, setDocType] = useState("aadhaar");
   const [files, setFiles] = useState([]);
   const [filePreviews, setFilePreviews] = useState([]);
-  const [form21Text, setForm21Text] = useState("");
   const [processedData, setProcessedData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -30,18 +29,32 @@ function App() {
         const formData = new FormData();
         formData.append("pdf", file);
 
-        const response = await axios.post("http://localhost:5000/extract-pdf-text", formData, {
+        // Extract text from PDF
+        const textResponse = await axios.post("http://localhost:5000/extract-pdf-text", formData, {
           headers: {
             "Content-Type": "multipart/form-data",
           },
         });
 
-        setForm21Text(response.data.text.trim());
+        const text = textResponse.data.text.trim();
+
+        // Extract details from text
+        const response = await axios.post("http://localhost:5000/extract-info", { docType, text }, {
+          headers: {
+            "Content-Type": "application/json",
+          },
+        });
+
+        if (response.data.result && typeof response.data.result === "object") {
+          setProcessedData(response.data.result);
+        } else {
+          setProcessedData({ message: "No data extracted." });
+        }
       } catch (err) {
-        const errorMessage = "Error extracting text from PDF: " + err.message;
+        const errorMessage = "Error processing PDF: " + err.message;
         console.error(errorMessage);
         setError(errorMessage);
-        setForm21Text("");
+        setProcessedData(null);
       } finally {
         setLoading(false);
       }
@@ -49,12 +62,8 @@ function App() {
   };
 
   const handleExtractText = async () => {
-    if (docType === "aadhaar" && files.length === 0) {
+    if (docType !== "aadhaar" || files.length === 0) {
       setError("Please upload at least one Aadhaar image.");
-      return;
-    }
-    if (docType === "form21" && !form21Text) {
-      setError("No text extracted from the Form 21 PDF.");
       return;
     }
 
@@ -63,13 +72,9 @@ function App() {
 
     try {
       let text = "";
-      if (docType === "aadhaar") {
-        for (const file of files) {
-          const { data: { text: ocrText } } = await Tesseract.recognize(file, "eng");
-          text += ocrText + "\n";
-        }
-      } else if (docType === "form21") {
-        text = form21Text;
+      for (const file of files) {
+        const { data: { text: ocrText } } = await Tesseract.recognize(file, "eng");
+        text += ocrText + "\n";
       }
 
       const response = await axios.post("http://localhost:5000/extract-info", { docType, text }, {
@@ -78,7 +83,6 @@ function App() {
         },
       });
 
-      // Extract the inner result object from the response
       if (response.data.result && typeof response.data.result === "object") {
         setProcessedData(response.data.result);
       } else {
@@ -134,7 +138,7 @@ Dated: ${processedData.dated || "N/A"}
     setFiles(updatedFiles);
     setFilePreviews(updatedPreviews);
     if (docType === "form21") {
-      setForm21Text("");
+      setProcessedData(null);
     }
   };
 
@@ -150,7 +154,6 @@ Dated: ${processedData.dated || "N/A"}
             setDocType(e.target.value);
             setFiles([]);
             setFilePreviews([]);
-            setForm21Text("");
             setProcessedData(null);
             setError("");
           }}
@@ -202,15 +205,22 @@ Dated: ${processedData.dated || "N/A"}
                   <br />
                 </div>
               )}
+              {(files.length > 0 && !processedData) && (
+                <button onClick={handleExtractText} disabled={loading}>
+                  {loading ? "Processing..." : "Extract Data"}
+                </button>
+              )}
             </>
           ) : (
             <>
-              <DragAndDrop
-                onFileSelect={handleFileSelect}
-                accept="application/pdf"
-                multiple={false}
-              />
-              {files.length > 0 && (
+              {!processedData && (
+                <DragAndDrop
+                  onFileSelect={handleFileSelect}
+                  accept="application/pdf"
+                  multiple={false}
+                />
+              )}
+              {files.length > 0 && !processedData && (
                 <div style={{ margin: "10px" }}>
                   <span>Uploaded PDF: {files[0].name}</span>
                   <button
@@ -230,29 +240,7 @@ Dated: ${processedData.dated || "N/A"}
                   </button>
                 </div>
               )}
-              <textarea
-                value={form21Text}
-                onChange={(e) => setForm21Text(e.target.value)}
-                placeholder="Extracted text from the PDF will appear here..."
-                style={{
-                  width: "100%",
-                  height: "150px",
-                  padding: "10px",
-                  fontFamily: "monospace",
-                  backgroundColor: "#f9f9f9",
-                  border: "1px solid #ccc",
-                  borderRadius: "6px",
-                  resize: "vertical",
-                  marginBottom: "1rem",
-                }}
-              />
             </>
-          )}
-
-          {(files.length > 0 || form21Text) && (
-            <button onClick={handleExtractText} disabled={loading}>
-              {loading ? "Processing..." : "Extract Data"}
-            </button>
           )}
 
           {error && <p className="error">{error}</p>}
@@ -309,6 +297,18 @@ Dated: ${processedData.dated || "N/A"}
               <button style={{ marginTop: "20px" }} onClick={handleCopy}>
                 Copy
               </button>
+              {docType === "form21" && (
+                <button
+                  style={{ marginTop: "10px", marginLeft: "10px" }}
+                  onClick={() => {
+                    setFiles([]);
+                    setFilePreviews([]);
+                    setProcessedData(null);
+                  }}
+                >
+                  Upload Another PDF
+                </button>
+              )}
             </div>
           )}
           {processedData && processedData.message && (
