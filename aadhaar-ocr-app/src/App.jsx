@@ -118,6 +118,7 @@ Year of Manufacture: ${processedData.yearOfManufacture || "N/A"}
 Month of Manufacture: ${processedData.monthOfManufacture || "N/A"}
 Name of Buyer: ${processedData.nameOfBuyer || "N/A"}
 Address: ${processedData.address || "N/A"}
+Mobile Number: ${processedData.mobileNumber || "N/A"}
 Dated: ${processedData.dated || "N/A"}
       `.trim();
     }
@@ -291,6 +292,7 @@ Dated: ${processedData.dated || "N/A"}
                   <div style={{ flexBasis: "100%" }}>
                     <strong>Address:</strong> {processedData.address || "N/A"}
                   </div>
+                  <div><strong>Mobile Number:</strong> {processedData.mobileNumber || "N/A"}</div>
                   <div><strong>Dated:</strong> {processedData.dated || "N/A"}</div>
                 </div>
               )}

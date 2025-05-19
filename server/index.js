@@ -4,7 +4,7 @@ import cors from "cors";
 import fetch from "node-fetch";
 import dotenv from "dotenv";
 import multer from "multer";
-import PDFParser from "pdf2json"; // Use pdf2json instead
+import PDFParser from "pdf2json";
 
 dotenv.config();
 
@@ -57,13 +57,14 @@ app.post("/extract-info", async (req, res) => {
     prompt = `
     Extract the following details from the text of a Form 21 (Vehicle Sale Certificate):
 
-    * Engine Number
-    * Chassis Number
-    * Year of Manufacture (format: YYYY)
-    * Month of Manufacture (e.g., January, February, etc.)
-    * Name of Buyer
-    * Full Address
-    * Dated (format: DD/MM/YYYY)
+    * Engine Number (look for "Engine No" or similar)
+    * Chassis Number (look for "Chassis No" or similar)
+    * Year of Manufacture (format: YYYY, extract from "Year of Manufacture" like "May/2025")
+    * Month of Manufacture (e.g., January, February, etc., extract from "Year of Manufacture" like "May/2025")
+    * Name of Buyer (look for "Name of the buyer" or similar)
+    * Full Address (look for "Address (Permanent)" or similar)
+    * Mobile Number (a 10-digit number following "Ph :" or "Mob :" appearing near or after "Name of the buyer" or "Address (Permanent)", NOT the dealer's phone number appearing earlier in the text near "JATASHANKAR MOTORS" or similar dealer-related text)
+    * Dated (format: DD/MM/YYYY, look for "Dated" or similar)
 
     Return ONLY a valid JSON object with these keys:
     {
@@ -73,8 +74,11 @@ app.post("/extract-info", async (req, res) => {
       "monthOfManufacture": "",
       "nameOfBuyer": "",
       "address": "",
+      "mobileNumber": "",
       "dated": ""
     }
+
+    If a field cannot be found, return "N/A" for that field. Be flexible with formatting and look for patterns even if labels are missing.
 
     Text:
     """
@@ -127,6 +131,14 @@ app.post("/extract-info", async (req, res) => {
     } catch (e) {
       console.error(`Failed to parse JSON for ${docType}:`, e.message, finalText);
       parsedResult = { error: "Failed to parse Gemini response", raw: finalText };
+    }
+
+    // Fallback for mobileNumber if Gemini fails (for Form 21)
+    if (docType === "form21" && (!parsedResult.mobileNumber || parsedResult.mobileNumber === "N/A")) {
+      const buyerSectionMatch = text.match(/Name of the buyer\s*[:\s].*?((?:Ph|Mob)\s*[:\s]*(\d{10}))/is);
+      if (buyerSectionMatch) {
+        parsedResult.mobileNumber = buyerSectionMatch[2];
+      }
     }
 
     console.log(`✅ ${docType === "aadhaar" ? "Aadhaar" : "Form 21"} data extracted successfully`);
