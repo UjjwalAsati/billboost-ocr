@@ -1,25 +1,27 @@
+// aadhaar-ocr-app/src/DragAndDrop.jsx
 import React from "react";
 import { useDropzone } from "react-dropzone";
 import "./App.css";
 
-const DragAndDrop = ({ onFileSelect }) => {
+const DragAndDrop = ({ onFileSelect, accept, multiple }) => {
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    accept: { "image/*": [] },
-    multiple: false,
+    accept: accept === "image/*" ? { "image/*": [] } : { "application/pdf": [] },
+    multiple,
+    maxFiles: 2,
     onDrop: (acceptedFiles) => {
       if (acceptedFiles.length > 0) {
-        onFileSelect(acceptedFiles[0]);
+        onFileSelect(acceptedFiles);
       }
-    }
+    },
   });
 
   return (
     <div {...getRootProps()} className="dropzone">
       <input {...getInputProps()} />
       {isDragActive ? (
-        <p>Drop the Aadhaar image here...</p>
+        <p>Drop the {accept === "image/*" ? "Aadhaar images" : "Form 21 PDF"} here...</p>
       ) : (
-        <p>Drag & drop Aadhaar image here, or click to select</p>
+        <p>Drag & drop {accept === "image/*" ? "Aadhaar images (up to 2)" : "Form 21 PDF"} here, or click to select</p>
       )}
     </div>
   );

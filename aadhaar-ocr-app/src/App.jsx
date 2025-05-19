@@ -1,51 +1,68 @@
+// aadhaar-ocr-app/src/App.jsx
 import React, { useState } from "react";
+import DragAndDrop from "./DragAndDrop";
 import Tesseract from "tesseract.js";
 import axios from "axios";
 import "./App.css";
 
 function App() {
-  const [images, setImages] = useState([]);
-  const [rawText, setRawText] = useState("");
+  const [docType, setDocType] = useState("aadhaar"); // Default to Aadhaar
+  const [files, setFiles] = useState([]); // For Aadhaar images (front and back)
+  const [filePreviews, setFilePreviews] = useState([]); // For Aadhaar image previews
+  const [form21Text, setForm21Text] = useState(""); // For Form 21 copied text
   const [processedData, setProcessedData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleImageChange = (e) => {
-    const files = Array.from(e.target.files);
-    const validImages = files.filter(file => file.type.startsWith("image/"));
-    setImages(validImages.map((file) => URL.createObjectURL(file)));
-    setRawText("");
+  const handleFileSelect = (selectedFiles) => {
+    const newFiles = [...files, ...selectedFiles].slice(0, 2); // Limit to 2 files
+    setFiles(newFiles);
     setProcessedData(null);
     setError("");
+
+    // Create previews for Aadhaar images
+    if (docType === "aadhaar") {
+      const newPreviews = newFiles.map(file => URL.createObjectURL(file));
+      setFilePreviews(newPreviews);
+    }
   };
 
   const handleExtractText = async () => {
-    if (images.length === 0) return;
+    if (docType === "aadhaar" && files.length === 0) {
+      setError("Please upload at least one Aadhaar image.");
+      return;
+    }
+    if (docType === "form21" && !form21Text) {
+      setError("Please paste the Form 21 text.");
+      return;
+    }
 
     setLoading(true);
     setError("");
-    let combinedText = "";
 
     try {
-      for (const img of images) {
-        const result = await Tesseract.recognize(img, "eng");
-        combinedText += result.data.text + "\n";
+      let text = "";
+      if (docType === "aadhaar") {
+        // Perform OCR on the frontend for Aadhaar images
+        for (const file of files) {
+          const { data: { text: ocrText } } = await Tesseract.recognize(file, "eng");
+          text += ocrText + "\n";
+        }
+      } else if (docType === "form21") {
+        text = form21Text;
       }
 
-      setRawText(combinedText);
-
-      const response = await axios.post("http://localhost:5000/extract-info", {
-        text: combinedText,
+      // Send the extracted text to the backend as JSON
+      const response = await axios.post("http://localhost:5000/extract-info", { docType, text }, {
+        headers: {
+          "Content-Type": "application/json",
+        },
       });
 
       if (response.data.result) {
-        if (typeof response.data.result === "object") {
-          setProcessedData(response.data.result);
-        } else {
-          setProcessedData({ message: response.data.result });
-        }
+        setProcessedData(response.data.result);
       } else {
-        setProcessedData({ message: "No cleaned data returned." });
+        setProcessedData({ message: "No data extracted." });
       }
     } catch (err) {
       setError("Error during processing: " + err.message);
@@ -58,65 +75,137 @@ function App() {
   const handleCopy = async () => {
     if (!processedData) return;
 
-    const cleaned = `
+    let cleaned = "";
+    if (docType === "aadhaar") {
+      cleaned = `
 Name: ${processedData.name || "N/A"}
 DOB: ${processedData.dob || "N/A"}
 Gender: ${processedData.gender || "N/A"}
 Aadhaar Number: ${processedData.aadhaarNumber || "N/A"}
 Address: ${processedData.address || "N/A"}
-    `.trim();
+      `.trim();
+    } else if (docType === "form21") {
+      cleaned = `
+Engine Number: ${processedData.engineNumber || "N/A"}
+Chassis Number: ${processedData.chassisNumber || "N/A"}
+Year of Manufacture: ${processedData.yearOfManufacture || "N/A"}
+Month of Manufacture: ${processedData.monthOfManufacture || "N/A"}
+Name of Buyer: ${processedData.nameOfBuyer || "N/A"}
+Address: ${processedData.address || "N/A"}
+Dated: ${processedData.dated || "N/A"}
+      `.trim();
+    }
 
     try {
       await navigator.clipboard.writeText(cleaned);
-      alert("Cleaned Aadhaar data copied to clipboard!");
+      alert("Extracted data copied to clipboard!");
     } catch (err) {
       alert("Failed to copy.");
-      console.error(err);
     }
   };
 
+  const handleRemoveImage = (index) => {
+    const updatedFiles = files.filter((_, i) => i !== index);
+    const updatedPreviews = filePreviews.filter((_, i) => i !== index);
+    setFiles(updatedFiles);
+    setFilePreviews(updatedPreviews);
+  };
+
   return (
-    <div style={{ padding: "2rem" }}>
-      <h1 style={{ textAlign: "center", marginBottom: "2rem" }}>
-        Aadhaar OCR Extractor
-      </h1>
+    <div className="container">
+      <h1>OCR Document Extractor</h1>
+
+      <div style={{ marginBottom: "1.5rem" }}>
+        <label style={{ marginRight: "10px", fontWeight: "bold" }}>Select Document Type: </label>
+        <select
+          value={docType}
+          onChange={(e) => {
+            setDocType(e.target.value);
+            setFiles([]);
+            setFilePreviews([]);
+            setForm21Text("");
+            setProcessedData(null);
+            setError("");
+          }}
+          style={{ padding: "5px", borderRadius: "4px" }}
+        >
+          <option value="aadhaar">Aadhaar Card</option>
+          <option value="form21">Form 21 (Vehicle Sale Certificate)</option>
+        </select>
+      </div>
 
       <div style={{ display: "flex", gap: "2rem", flexWrap: "wrap" }}>
-        {/* Left Side: Image Upload */}
+        {/* Left Side: File Upload or Textarea */}
         <div style={{ flex: 1, textAlign: "center" }}>
-          <input
-            type="file"
-            accept="image/*"
-            multiple
-            onChange={handleImageChange}
-            disabled={loading}
-          />
-          <br />
-          <br />
-
-          {images.length > 0 && (
-            <div>
-              {images.map((img, index) => (
-                <img
-                  key={index}
-                  src={img}
-                  alt={`Aadhaar ${index + 1}`}
-                  width="250"
-                  style={{ margin: "10px", borderRadius: "8px" }}
-                />
-              ))}
-
-              <br />
-              <button onClick={handleExtractText} disabled={loading}>
-                {loading ? "Processing..." : "Extract & Clean"}
-              </button>
-            </div>
+          {docType === "aadhaar" ? (
+            <>
+              <DragAndDrop
+                onFileSelect={handleFileSelect}
+                accept="image/*"
+                multiple={true}
+              />
+              {filePreviews.length > 0 && (
+                <div>
+                  {filePreviews.map((preview, index) => (
+                    <div key={index} style={{ display: "inline-block", position: "relative", margin: "10px" }}>
+                      <img
+                        src={preview}
+                        alt={`Uploaded Aadhaar ${index + 1}`}
+                        width="150"
+                        style={{ borderRadius: "8px" }}
+                      />
+                      <button
+                        onClick={() => handleRemoveImage(index)}
+                        style={{
+                          position: "absolute",
+                          top: "-10px",
+                          right: "-10px",
+                          background: "red",
+                          color: "white",
+                          border: "none",
+                          borderRadius: "50%",
+                          width: "20px",
+                          height: "20px",
+                          cursor: "pointer",
+                        }}
+                      >
+                        X
+                      </button>
+                    </div>
+                  ))}
+                  <br />
+                </div>
+              )}
+            </>
+          ) : (
+            <textarea
+              value={form21Text}
+              onChange={(e) => setForm21Text(e.target.value)}
+              placeholder="Paste the copied Form 21 text here..."
+              style={{
+                width: "100%",
+                height: "150px",
+                padding: "10px",
+                fontFamily: "monospace",
+                backgroundColor: "#f9f9f9",
+                border: "1px solid #ccc",
+                borderRadius: "6px",
+                resize: "vertical",
+                marginBottom: "1rem",
+              }}
+            />
           )}
 
-          {error && <p style={{ color: "red", marginTop: "1rem" }}>{error}</p>}
+          {(files.length > 0 || form21Text) && (
+            <button onClick={handleExtractText} disabled={loading}>
+              {loading ? "Processing..." : "Extract Data"}
+            </button>
+          )}
+
+          {error && <p className="error">{error}</p>}
         </div>
 
-        {/* Right Side: Aadhaar Details */}
+        {/* Right Side: Extracted Details */}
         <div style={{ flex: 1 }}>
           {processedData && (
             <div
@@ -129,24 +218,43 @@ Address: ${processedData.address || "N/A"}
                 lineHeight: "1.8",
               }}
             >
-              <h3>Cleaned Aadhaar Details:</h3>
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  gap: "20px",
-                }}
-              >
-                <div><strong>Name:</strong> {processedData.name || "N/A"}</div>
-                <div><strong>DOB:</strong> {processedData.dob || "N/A"}</div>
-                <div><strong>Gender:</strong> {processedData.gender || "N/A"}</div>
-                <div><strong>Aadhaar Number:</strong> {processedData.aadhaarNumber || "N/A"}</div>
-                <div style={{ flexBasis: "100%" }}>
-                  <strong>Address:</strong> {processedData.address || "N/A"}
+              <h3>Extracted Details:</h3>
+              {docType === "aadhaar" ? (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "20px",
+                  }}
+                >
+                  <div><strong>Name:</strong> {processedData.name || "N/A"}</div>
+                  <div><strong>DOB:</strong> {processedData.dob || "N/A"}</div>
+                  <div><strong>Gender:</strong> {processedData.gender || "N/A"}</div>
+                  <div><strong>Aadhaar Number:</strong> {processedData.aadhaarNumber || "N/A"}</div>
+                  <div style={{ flexBasis: "100%" }}>
+                    <strong>Address:</strong> {processedData.address || "N/A"}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div
+                  style={{
+                    display: "flex",
+                    flexWrap: "wrap",
+                    gap: "20px",
+                  }}
+                >
+                  <div><strong>Engine Number:</strong> {processedData.engineNumber || "N/A"}</div>
+                  <div><strong>Chassis Number:</strong> {processedData.chassisNumber || "N/A"}</div>
+                  <div><strong>Year of Manufacture:</strong> {processedData.yearOfManufacture || "N/A"}</div>
+                  <div><strong>Month of Manufacture:</strong> {processedData.monthOfManufacture || "N/A"}</div>
+                  <div><strong>Name of Buyer:</strong> {processedData.nameOfBuyer || "N/A"}</div>
+                  <div style={{ flexBasis: "100%" }}>
+                    <strong>Address:</strong> {processedData.address || "N/A"}
+                  </div>
+                  <div><strong>Dated:</strong> {processedData.dated || "N/A"}</div>
+                </div>
+              )}
 
-              {/* ✅ Copy Button */}
               <button style={{ marginTop: "20px" }} onClick={handleCopy}>Copy</button>
             </div>
           )}
