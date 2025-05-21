@@ -33,6 +33,11 @@ function convertShortMonthToFull(month) {
   return map[month.toLowerCase()] || month;
 }
 
+function cleanTitleFromName(name) {
+  if (!name || name === "N/A") return name;
+  return name.replace(/^(mr|mrs|ms|miss)\.?[\s]+/i, "").trim();
+}
+
 app.post("/extract-info", async (req, res) => {
   if (!req.body) {
     return res.status(400).json({ error: "Request body is required" });
@@ -146,6 +151,10 @@ app.post("/extract-info", async (req, res) => {
       if (parsedResult.monthOfManufacture) {
         parsedResult.monthOfManufacture = convertShortMonthToFull(parsedResult.monthOfManufacture);
       }
+
+      if (parsedResult.nameOfBuyer) {
+        parsedResult.nameOfBuyer = cleanTitleFromName(parsedResult.nameOfBuyer);
+      }
     }
 
     console.log(
@@ -190,5 +199,5 @@ app.post("/extract-pdf-text", upload.single("pdf"), async (req, res) => {
 
 const PORT = 5000;
 app.listen(PORT, () => {
-  console.log(`🚀 Server listening on port ${PORT}`);
+  console.log(` Server listening on port ${PORT}`);
 });
