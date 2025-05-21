@@ -12,18 +12,73 @@ const app = express();
 app.use(express.json());
 app.use(cors());
 
-const upload = multer({ storage: multer.memoryStorage() });
+const upload = multer({ storage: multer.memoryStorage()() });
+
+function cleanText(text) {
+  if (!text || text === "N/A") return text;
+
+  let cleaned = text.trim().replace(/\s+/g, ' ');
+
+ 
+  const allLetters = cleaned.replace(/ /g, '');
+  if (/^[A-Z\s]+$/i.test(cleaned) && allLetters.length > 2) {
+    return allLetters;
+  }
+
+ 
+  const words = cleaned.split(' ');
+  const mergedWords = [];
+  let buffer = "";
+
+  for (let word of words) {
+    if (word.length === 1 && /^[A-Z]$/i.test(word)) {
+      buffer += word;
+    } else {
+      if (buffer) {
+        mergedWords.push(buffer);
+        buffer = "";
+      }
+      mergedWords.push(word);
+    }
+  }
+
+  if (buffer) mergedWords.push(buffer);
+
+  return mergedWords.join(' ');
+}
+
+
+function convertShortMonthToFull(month) {
+  if (!month || month === "N/A") return month;
+  const monthMap = {
+    'jan': 'January',
+    'feb': 'February',
+    'mar': 'March',
+    'apr': 'April',
+    'may': 'May',
+    'jun': 'June',
+    'jul': 'July',
+    'aug': 'August',
+    'sep': 'September',
+    'oct': 'October',
+    'nov': 'November',
+    'dec': 'December'
+  };
+  const lowerMonth = month.toLowerCase();
+  return monthMap[lowerMonth] || month;
+}
 
 app.post("/extract-info", async (req, res) => {
-  if (!req.body) {
-    return res.status(400).json({ error: "Request body is required" });
-  }
+  if (!req.body) return res.status(400).json({ error: "Request body is required" });
 
   const { docType, text } = req.body;
+  if (!docType || !text) return res.status(400).json({ error: "docType and text are required" });
 
-  if (!docType || !text) {
-    return res.status(400).json({ error: "docType and text are required" });
-  }
+  const cleanedText = text.split('\n').map(line => {
+    const [key, value] = line.split(': ').map(part => part.trim());
+    if (value) return `${key}: ${cleanText(value)}`;
+    return line;
+  }).join('\n');
 
   let prompt = "";
   if (docType === "aadhaar") {
@@ -42,13 +97,12 @@ app.post("/extract-info", async (req, res) => {
 
     OCR Text:
     """
-    ${text.trim()}
+    ${cleanedText.trim()}
     """
     `.trim();
   } else if (docType === "form21") {
     prompt = `
     Extract the following details from the OCR text of a Form 21:
-And if monthofManufacture is in short form like Apr, Oct then return the full name of the month like Oct then return October
     {
       "engineNumber": "",
       "chassisNumber": "",
@@ -64,7 +118,7 @@ And if monthofManufacture is in short form like Apr, Oct then return the full na
     Return valid JSON only. If a field is missing, use "N/A".
     Text:
     """
-    ${text.trim()}
+    ${cleanedText.trim()}
     """
     `.trim();
   } else {
@@ -95,14 +149,9 @@ And if monthofManufacture is in short form like Apr, Oct then return the full na
 
     const finalTextRaw = data.candidates?.[0]?.content?.parts?.[0]?.text;
 
-    if (!finalTextRaw) {
-      return res.json({ result: "No result found" });
-    }
+    if (!finalTextRaw) return res.json({ result: "No result found" });
 
-    const extractJson = (text) => {
-      return text.trim().replace(/^```json\s*/, "").replace(/\s*```$/, "");
-    };
-
+    const extractJson = (text) => text.trim().replace(/^```json\s*/, "").replace(/\s*```$/, "");
     const finalText = extractJson(finalTextRaw);
 
     let parsedResult;
@@ -111,29 +160,41 @@ And if monthofManufacture is in short form like Apr, Oct then return the full na
     } catch (e) {
       parsedResult = { error: "Failed to parse Gemini response", raw: finalText };
     }
-    
+
+    // Post-cleaning
     if (parsedResult.nameOfBuyer && parsedResult.nameOfBuyer !== "N/A") {
-      parsedResult.nameOfBuyer = parsedResult.nameOfBuyer.replace(/^(Mr|Mrs|Ms|Shri)\s+/i, "");
+      parsedResult.nameOfBuyer = cleanText(parsedResult.nameOfBuyer.replace(/^(Mr|Mrs|Ms|Shri)\s+/i, "$1 "));
+    }
+    if (parsedResult.address && parsedResult.address !== "N/A") {
+      parsedResult.address = cleanText(parsedResult.address);
+    }
+    if (docType === "aadhaar") {
+      if (parsedResult.name && parsedResult.name !== "N/A") {
+        parsedResult.name = cleanText(parsedResult.name);
+      }
+      if (parsedResult.address && parsedResult.address !== "N/A") {
+        parsedResult.address = cleanText(parsedResult.address);
+      }
     }
 
+    
+    if (docType === "form21" && parsedResult.monthOfManufacture && parsedResult.monthOfManufacture !== "N/A") {
+      parsedResult.monthOfManufacture = convertShortMonthToFull(parsedResult.monthOfManufacture);
+    }
+
+    
     if (docType === "form21") {
       if (!parsedResult.mobileNumber || parsedResult.mobileNumber === "N/A") {
-        const match = text.match(/Name of the buyer\s*[:\s][\s\S]*?(?:Ph|Mob)\s*[:\s]*(\d{10})/i);
+        const match = text.match(/(?:Ph|Mob)\s*[:\s]*(\d{10})/i);
         if (match) parsedResult.mobileNumber = match[1];
       }
-
       if (!parsedResult.pincode || parsedResult.pincode === "N/A") {
-        const match = text.match(/Address\s*(?:\(|:)?[\s\S]*?[-:\s]?\b(\d{6})\b/i);
+        const match = text.match(/\b(\d{6})\b/);
         if (match) parsedResult.pincode = match[1];
       }
     }
 
-    console.log(
-      docType === "aadhaar"
-        ? "Aadhaar card data extracted successfully"
-        : "Form 21 data extracted successfully"
-    );
-
+    console.log(`${docType} data extracted successfully`);
     res.json({ result: parsedResult });
   } catch (error) {
     res.status(500).json({ error: "Failed to fetch from Gemini" });
