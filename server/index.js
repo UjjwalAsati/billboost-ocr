@@ -48,7 +48,7 @@ app.post("/extract-info", async (req, res) => {
   } else if (docType === "form21") {
     prompt = `
     Extract the following details from the OCR text of a Form 21:
-
+And if monthofManufacture is in short form like Apr, Oct then return the full name of the month like Oct then return October
     {
       "engineNumber": "",
       "chassisNumber": "",
@@ -62,7 +62,6 @@ app.post("/extract-info", async (req, res) => {
     }
 
     Return valid JSON only. If a field is missing, use "N/A".
-
     Text:
     """
     ${text.trim()}
