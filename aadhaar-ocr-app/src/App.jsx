@@ -1,4 +1,3 @@
-
 import React, { useState } from "react";
 import DragAndDrop from "./DragAndDrop";
 import Tesseract from "tesseract.js";
@@ -22,46 +21,12 @@ function App() {
     if (docType === "aadhaar") {
       const newPreviews = newFiles.map(file => URL.createObjectURL(file));
       setFilePreviews(newPreviews);
-    } else if (docType === "form21" && selectedFiles.length > 0) {
-      setLoading(true);
-      try {
-        const file = selectedFiles[0];
-        const formData = new FormData();
-        formData.append("pdf", file);
-
-        const textResponse = await axios.post("http://localhost:5000/extract-pdf-text", formData, {
-          headers: {
-            "Content-Type": "multipart/form-data",
-          },
-        });
-
-        const text = textResponse.data.text.trim();
-
-        const response = await axios.post("http://localhost:5000/extract-info", { docType, text }, {
-          headers: {
-            "Content-Type": "application/json",
-          },
-        });
-
-        if (response.data.result && typeof response.data.result === "object") {
-          setProcessedData(response.data.result);
-        } else {
-          setProcessedData({ message: "No data extracted." });
-        }
-      } catch (err) {
-        const errorMessage = "Error processing PDF: " + err.message;
-        console.error(errorMessage);
-        setError(errorMessage);
-        setProcessedData(null);
-      } finally {
-        setLoading(false);
-      }
     }
   };
 
   const handleExtractText = async () => {
-    if (docType !== "aadhaar" || files.length === 0) {
-      setError("Please upload at least one Aadhaar image.");
+    if (files.length === 0) {
+      setError("Please upload a file first.");
       return;
     }
 
@@ -70,9 +35,23 @@ function App() {
 
     try {
       let text = "";
-      for (const file of files) {
-        const { data: { text: ocrText } } = await Tesseract.recognize(file, "eng");
-        text += ocrText + "\n";
+
+      if (docType === "aadhaar") {
+        for (const file of files) {
+          const { data: { text: ocrText } } = await Tesseract.recognize(file, "eng");
+          text += ocrText + "\n";
+        }
+      } else if (docType === "form21") {
+        const formData = new FormData();
+        formData.append("pdf", files[0]);
+
+        const textResponse = await axios.post("http://localhost:5000/extract-pdf-text", formData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
+          },
+        });
+
+        text = textResponse.data.text.trim();
       }
 
       const response = await axios.post("http://localhost:5000/extract-info", { docType, text }, {
@@ -91,9 +70,9 @@ function App() {
       console.error(errorMessage, err.response?.data);
       setError(errorMessage);
       setProcessedData(null);
+    } finally {
+      setLoading(false);
     }
-
-    setLoading(false);
   };
 
   const handleCopy = async () => {
@@ -238,6 +217,10 @@ Dated: ${processedData.dated || "N/A"}
                   >
                     X
                   </button>
+                  <br /><br />
+                  <button onClick={handleExtractText} disabled={loading}>
+                    {loading ? "Processing..." : "Extract Data"}
+                  </button>
                 </div>
               )}
             </>
@@ -260,13 +243,7 @@ Dated: ${processedData.dated || "N/A"}
             >
               <h3>Extracted Details:</h3>
               {docType === "aadhaar" ? (
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "20px",
-                  }}
-                >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "20px" }}>
                   <div><strong>Name:</strong> {processedData.name || "N/A"}</div>
                   <div><strong>DOB:</strong> {processedData.dob || "N/A"}</div>
                   <div><strong>Gender:</strong> {processedData.gender || "N/A"}</div>
@@ -276,13 +253,7 @@ Dated: ${processedData.dated || "N/A"}
                   </div>
                 </div>
               ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexWrap: "wrap",
-                    gap: "20px",
-                  }}
-                >
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "20px" }}>
                   <div><strong>Engine Number:</strong> {processedData.engineNumber || "N/A"}</div>
                   <div><strong>Chassis Number:</strong> {processedData.chassisNumber || "N/A"}</div>
                   <div><strong>Year of Manufacture:</strong> {processedData.yearOfManufacture || "N/A"}</div>
