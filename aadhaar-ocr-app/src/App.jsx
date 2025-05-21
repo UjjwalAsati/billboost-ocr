@@ -1,4 +1,4 @@
-// aadhaar-ocr-app/src/App.jsx
+
 import React, { useState } from "react";
 import DragAndDrop from "./DragAndDrop";
 import Tesseract from "tesseract.js";
@@ -29,7 +29,6 @@ function App() {
         const formData = new FormData();
         formData.append("pdf", file);
 
-        // Extract text from PDF
         const textResponse = await axios.post("http://localhost:5000/extract-pdf-text", formData, {
           headers: {
             "Content-Type": "multipart/form-data",
@@ -38,7 +37,6 @@ function App() {
 
         const text = textResponse.data.text.trim();
 
-        // Extract details from text
         const response = await axios.post("http://localhost:5000/extract-info", { docType, text }, {
           headers: {
             "Content-Type": "application/json",

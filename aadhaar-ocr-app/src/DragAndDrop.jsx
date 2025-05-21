@@ -1,4 +1,4 @@
-// aadhaar-ocr-app/src/DragAndDrop.jsx
+
 import React from "react";
 import { useDropzone } from "react-dropzone";
 import "./App.css";

@@ -112,8 +112,11 @@ app.post("/extract-info", async (req, res) => {
     } catch (e) {
       parsedResult = { error: "Failed to parse Gemini response", raw: finalText };
     }
+    
+    if (parsedResult.nameOfBuyer && parsedResult.nameOfBuyer !== "N/A") {
+      parsedResult.nameOfBuyer = parsedResult.nameOfBuyer.replace(/^(Mr|Mrs|Ms|Shri)\s+/i, "");
+    }
 
-    // Fallback regex (silent)
     if (docType === "form21") {
       if (!parsedResult.mobileNumber || parsedResult.mobileNumber === "N/A") {
         const match = text.match(/Name of the buyer\s*[:\s][\s\S]*?(?:Ph|Mob)\s*[:\s]*(\d{10})/i);
@@ -128,8 +131,8 @@ app.post("/extract-info", async (req, res) => {
 
     console.log(
       docType === "aadhaar"
-        ? "✅ Aadhaar card data extracted successfully"
-        : "✅ Form 21 data extracted successfully"
+        ? "Aadhaar card data extracted successfully"
+        : "Form 21 data extracted successfully"
     );
 
     res.json({ result: parsedResult });
@@ -158,10 +161,10 @@ app.post("/extract-pdf-text", upload.single("pdf"), async (req, res) => {
       pdfParser.parseBuffer(req.file.buffer);
     });
 
-    console.log("✅ PDF text extraction successful");
+    console.log("PDF text extraction successful");
     res.json({ text });
   } catch (err) {
-    console.error("❌ PDF extraction failed:", err.message);
+    console.error("PDF extraction failed:", err.message);
     res.status(500).json({ error: "Failed to extract text from PDF: " + err.message });
   }
 });
