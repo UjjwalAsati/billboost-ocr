@@ -12,6 +12,8 @@ function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
+  const API_URL = import.meta.env.VITE_API_URL;
+
   const handleFileSelect = async (selectedFiles) => {
     const newFiles = [...files, ...selectedFiles].slice(0, docType === "aadhaar" ? 2 : 1);
     setFiles(newFiles);
@@ -45,7 +47,7 @@ function App() {
         const formData = new FormData();
         formData.append("pdf", files[0]);
 
-        const textResponse = await axios.post("http://localhost:5000/extract-pdf-text", formData, {
+        const textResponse = await axios.post(`${API_URL}/extract-pdf-text`, formData, {
           headers: {
             "Content-Type": "multipart/form-data",
           },
@@ -54,7 +56,7 @@ function App() {
         text = textResponse.data.text.trim();
       }
 
-      const response = await axios.post("http://localhost:5000/extract-info", { docType, text }, {
+      const response = await axios.post(`${API_URL}/extract-info`, { docType, text }, {
         headers: {
           "Content-Type": "application/json",
         },
