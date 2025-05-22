@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "src": "aadhaar-ocr-app/package.json",
+      "use": "@vercel/static-build",
+      "config": {
+        "distDir": "aadhaar-ocr-app/dist"
+      }
+    }
+  ],
+  "routes": [
+    { "src": "/(.*)", "dest": "/index.html" }
+  ]
+}
