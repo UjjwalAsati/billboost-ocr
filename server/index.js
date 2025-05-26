@@ -199,5 +199,5 @@ app.post("/extract-pdf-text", upload.single("pdf"), async (req, res) => {
 
 const PORT = 5000;
 app.listen(PORT, () => {
-  console.log(`Server listening on port ${PORT}`);
+  console.log(`Server is running`);
 });
