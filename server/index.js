@@ -33,9 +33,54 @@ function convertShortMonthToFull(month) {
   return map[month.toLowerCase()] || month;
 }
 
-function cleanTitleFromName(name) {
+function cleanName(name) {
   if (!name || name === "N/A") return name;
-  return name.replace(/^(mr|mrs|ms|miss)\.?[\s]+/i, "").trim();
+  let cleaned = name
+    .replace(/^(mr|mrs|ms|miss|shri|smt|km)\.?\s*/i, "")
+    .trim()
+    .replace(/\s+/g, " ");
+  if (/^([A-Z]\s){2,}[A-Z]$/.test(cleaned)) {
+    cleaned = cleaned.replace(/\s+/g, "");
+  }
+  return cleaned;
+}
+
+function normalizeWhitespace(text) {
+  if (!text) return text;
+  return text.replace(/\s+/g, " ").trim();
+}
+
+function cleanAddress(address, pincode) {
+  if (!address || address === "N/A") return address;
+  let cleaned = normalizeWhitespace(address);
+  if (pincode && pincode !== "N/A") {
+    const pinRegex = new RegExp(`\\b${pincode}\\b`);
+    cleaned = cleaned.replace(pinRegex, "").trim();
+  }
+  cleaned = cleaned
+    .replace(/\bNH\s*(\d+)\b/gi, 'NH $1')
+    .replace(/\bPUC\s*HYT\s*BWM\s*I\b/gi, 'Panchayat Bhawan Bamitha')
+    .replace(/\bBWM\s*I\b/gi, 'Bamitha')
+    .replace(/\bPUC\s*HYT\b/gi, 'Panchayat')
+    .replace(/\bT\s*B\s*W\s*N\b/gi, 'Town')
+    .replace(/\bCHH\s*ATAR\s*PUR\b/gi, 'Chhatarpur');
+  const words = cleaned.split(" ");
+  const seen = new Set();
+  const deduped = [];
+  for (const word of words) {
+    const lower = word.toLowerCase();
+    if (!seen.has(lower)) {
+      seen.add(lower);
+      deduped.push(word);
+    }
+  }
+  let result = deduped.join(" ");
+  const cityPattern = /(?:^|\s)(Chhatarpur|Bamitha|Near|NH \d+)/i;
+  const cityMatch = result.match(cityPattern);
+  if (cityMatch) {
+    result = result.replace(cityPattern, '\n$1');
+  }
+  return result.trim();
 }
 
 app.post("/extract-info", async (req, res) => {
@@ -71,7 +116,11 @@ app.post("/extract-info", async (req, res) => {
     `.trim();
   } else if (docType === "form21") {
     prompt = `
-    Extract the following details from the OCR text of a Form 21:
+    Extract the following details from the OCR text of a Form 21 document. 
+    Pay special attention to:
+    - Name of Buyer: Just keep as it is removing intials like mr, Mr, Mrs,mrs
+    - Address: Use the permanent address (not temporary).Also remove "-" in the address. Combine NH numbers properly (NH39 -> NH 39) and fix common OCR errors
+    - Ensure all fields are properly extracted from the text
 
     {
       "engineNumber": "",
@@ -139,12 +188,12 @@ app.post("/extract-info", async (req, res) => {
 
     if (docType === "form21") {
       if (!parsedResult.mobileNumber || parsedResult.mobileNumber === "N/A") {
-        const match = text.match(/Name of the buyer\s*[:\s][\s\S]*?(?:Ph|Mob)\s*[:\s]*(\d{10})/i);
+        const match = text.match(/(?:mobile|mob|phone)\s*[:]?\s*(\d{10})/i);
         if (match) parsedResult.mobileNumber = match[1];
       }
 
       if (!parsedResult.pincode || parsedResult.pincode === "N/A") {
-        const match = text.match(/Address\s*(?:\(|:)?[\s\S]*?[-:\s]?\b(\d{6})\b/i);
+        const match = text.match(/\b(\d{6})\b/);
         if (match) parsedResult.pincode = match[1];
       }
 
@@ -153,7 +202,17 @@ app.post("/extract-info", async (req, res) => {
       }
 
       if (parsedResult.nameOfBuyer) {
-        parsedResult.nameOfBuyer = cleanTitleFromName(parsedResult.nameOfBuyer);
+        parsedResult.nameOfBuyer = cleanName(parsedResult.nameOfBuyer);
+      }
+
+      if (parsedResult.address) {
+        parsedResult.address = cleanAddress(parsedResult.address, parsedResult.pincode);
+      }
+
+      for (const key in parsedResult) {
+        if (typeof parsedResult[key] === "string") {
+          parsedResult[key] = normalizeWhitespace(parsedResult[key]);
+        }
       }
     }
 
@@ -165,6 +224,7 @@ app.post("/extract-info", async (req, res) => {
 
     res.json({ result: parsedResult });
   } catch (error) {
+    console.error("Error in extract-info:", error);
     res.status(500).json({ error: "Failed to fetch from Gemini" });
   }
 });
@@ -199,5 +259,5 @@ app.post("/extract-pdf-text", upload.single("pdf"), async (req, res) => {
 
 const PORT = 5000;
 app.listen(PORT, () => {
-  console.log(`Server is running`);
+  console.log(`Server is running on port ${PORT}`);
 });
