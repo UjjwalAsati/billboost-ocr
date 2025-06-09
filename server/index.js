@@ -116,31 +116,35 @@ app.post("/extract-info", async (req, res) => {
     `.trim();
   } else if (docType === "form21") {
     prompt = `
-    Extract the following details from the OCR text of a Form 21 document. 
-    Pay special attention to:
-    - Name of Buyer: Just keep as it is removing intials like mr, Mr, Mrs,mrs
-    - Address: Use the permanent address (not temporary).Also remove "-" in the address. Combine NH numbers properly (NH39 -> NH 39) and fix common OCR errors
-    - Ensure all fields are properly extracted from the text
+Extract the following details from the OCR text of a Form 21 document.
 
-    {
-      "engineNumber": "",
-      "chassisNumber": "",
-      "yearOfManufacture": "",
-      "monthOfManufacture": "",
-      "nameOfBuyer": "",
-      "address": "",
-      "pincode": "",
-      "mobileNumber": "",
-      "dated": ""
-    }
+- "Name of Buyer": Just remove titles like Mr, Mrs, etc.
+- "Address": Use the permanent address only. Remove dashes, fix common OCR issues (e.g., NH39 → NH 39), and normalize whitespace.
+- **Include the "Wife/Son/Daughter of" line (like "S/O DEENDAYAL NAMDEO") as the first part of the address. IF NOT AVAILABLE THEN DONT PUT N/A JUST LEAVE IT**
+- "Month of Manufacture": Convert short form (e.g., May) to full form ("May").
+- Ensure all values are clean and structured.
 
-    Return valid JSON only. If a field is missing, use "N/A".
+JSON format:
+{
+  "engineNumber": "",
+  "chassisNumber": "",
+  "yearOfManufacture": "",
+  "monthOfManufacture": "",
+  "nameOfBuyer": "",
+  "address": "",
+  "pincode": "",
+  "mobileNumber": "",
+  "dated": ""
+}
 
-    Text:
-    """
-    ${text.trim()}
-    """
-    `.trim();
+Return valid JSON only. If a field is missing, use "N/A".
+
+Text:
+"""
+${text.trim()}
+"""
+`.trim();
+
   } else {
     return res.status(400).json({ error: "Invalid docType" });
   }
@@ -206,8 +210,24 @@ app.post("/extract-info", async (req, res) => {
       }
 
       if (parsedResult.address) {
-        parsedResult.address = cleanAddress(parsedResult.address, parsedResult.pincode);
-      }
+ 
+  let cleanedAddress = cleanAddress(parsedResult.address, parsedResult.pincode);
+
+  const relationLineMatch = text.match(/Wife\/Son\/Daughter of\s*[:\-]?\s*(S\/O|D\/O|W\/O)\s+([A-Z\s]{3,40})/i);
+
+  if (relationLineMatch) {
+    const relation = relationLineMatch[1].toUpperCase(); 
+    const name = normalizeWhitespace(relationLineMatch[2]);
+    const relationPhrase = `${relation} ${name}`.trim();
+    if (!cleanedAddress.toLowerCase().includes(relationPhrase.toLowerCase())) {
+      cleanedAddress = `${relationPhrase} ${cleanedAddress}`;
+    }
+  }
+
+  parsedResult.address = cleanedAddress.trim();
+}
+
+
 
       for (const key in parsedResult) {
         if (typeof parsedResult[key] === "string") {
