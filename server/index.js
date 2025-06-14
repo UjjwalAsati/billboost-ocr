@@ -80,8 +80,9 @@ function cleanAddress(address, pincode) {
   if (cityMatch) {
     result = result.replace(cityPattern, '\n$1');
   }
-  return result.trim();
+  return result.toUpperCase();
 }
+
 
 app.post("/extract-info", async (req, res) => {
   if (!req.body) {
@@ -119,7 +120,7 @@ app.post("/extract-info", async (req, res) => {
 Extract the following details from the OCR text of a Form 21 document.
 
 - "Name of Buyer": Just remove titles like Mr, Mrs, etc.
-- "Address": Use the permanent address only. Remove dashes, fix common OCR issues (e.g., NH39 → NH 39), and normalize whitespace.
+- "Address": Use the permanent address only. Remove dashes, fix common OCR issues (e.g., NH39 → NH 39), and normalize whitespace, and make everything in UPPERCASE.
 - **Include the "Wife/Son/Daughter of" line (like "S/O DEENDAYAL NAMDEO") as the first part of the address. IF NOT AVAILABLE THEN DONT PUT N/A JUST LEAVE IT**
 - "Month of Manufacture": Convert short form (e.g., May) to full form ("May").
 - Ensure all values are clean and structured.
