@@ -278,6 +278,9 @@ app.post("/extract-pdf-text", upload.single("pdf"), async (req, res) => {
   }
 });
 
+app.get("/", (_req, res) => {
+  res.send("BillBoost OCR Backend is running.");
+});
 
 app.get("/ping", (_req, res) => {
   res.send("Server is alive");
